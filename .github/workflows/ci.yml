@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Every supported platform has a native runner, so each one links its own library and runs the full suite.
+  test:
+    name: test ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux/amd64
+            runner: ubuntu-latest
+          - target: linux/arm64
+            runner: ubuntu-24.04-arm
+          - target: darwin/arm64
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -v ./...
+
+  # The committed libraries, header, fixtures and licences must be exactly the ones of the ere release, and the
+  # binding must still match upstream.
+  upstream:
+    name: matches the ere release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - run: go run ./internal/update
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: git diff --exit-code
+
+  # An unsupported platform must fail with the legible error, not a link error.
+  unsupported:
+    name: unsupported platform error
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - run: |
+          if out=$(CGO_ENABLED=0 go build ./... 2>&1); then
+            echo "build without cgo unexpectedly succeeded"; exit 1
+          fi
+          echo "$out"
+          echo "$out" | grep -q ere_needs_cgo_on_linux_amd64_linux_arm64_or_darwin_arm64

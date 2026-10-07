@@ -1,0 +1,4 @@
+# Prebuilt and copied from github.com/eth-act/ere releases: keep them out of diffs and language statistics.
+lib/**     binary linguist-vendored=true
+include/** linguist-vendored=true
+testdata/** binary
